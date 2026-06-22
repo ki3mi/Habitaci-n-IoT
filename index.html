@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Habitación IoT</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; text-align: center; background-color: #f4f4f9; color: #333; }
+        h1 { color: #2c3e50; }
+        .panel { background: white; border-radius: 10px; padding: 20px; margin: 20px auto; max-width: 800px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .controles { display: flex; justify-content: space-around; flex-wrap: wrap; }
+        .grupo-control { margin: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #fafafa; min-width: 180px; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; color: white; transition: 0.3s; width: 80px;}
+        .btn-on { background-color: #27ae60; }
+        .btn-on:hover { background-color: #2ecc71; }
+        .btn-off { background-color: #c0392b; }
+        .btn-off:hover { background-color: #e74c3c; }
+        .btn-abrir { background-color: #2980b9; width: 100px;}
+        .btn-abrir:hover { background-color: #3498db; }
+        .btn-cerrar { background-color: #f39c12; width: 100px;}
+        .btn-cerrar:hover { background-color: #f1c40f; }
+        canvas { max-width: 100%; height: auto; }
+        #estado-conexion { font-weight: bold; color: #e67e22; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+    <h1>Control de Habitación Inteligente</h1>
+    <div id="estado-conexion">Conectando al Broker MQTT...</div>
+    
+    <div class="panel">
+        <h2>Panel de Control</h2>
+        <div class="controles">
+            <div class="grupo-control">
+                <h3>Luz 1 (Roja)</h3>
+                <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/1', 'ON')">ON</button>
+                <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/1', 'OFF')">OFF</button>
+            </div>
+            <div class="grupo-control">
+                <h3>Luz 2 (Verde)</h3>
+                <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/2', 'ON')">ON</button>
+                <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/2', 'OFF')">OFF</button>
+            </div>
+            <div class="grupo-control">
+                <h3>Luz 3 (Azul)</h3>
+                <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/3', 'ON')">ON</button>
+                <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/3', 'OFF')">OFF</button>
+            </div>
+            <div class="grupo-control">
+                <h3>Ventana (Servo)</h3>
+                <button class="btn-abrir" onclick="enviarMensaje('proyecto/cuarto/ventana', 'ABRIR')">ABRIR</button>
+                <button class="btn-cerrar" onclick="enviarMensaje('proyecto/cuarto/ventana', 'CERRAR')">CERRAR</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Monitor de Clima</h2>
+        <canvas id="graficaClima"></canvas>
+    </div>
+
+    <script>
+        // 1. Configurar la Gráfica de Chart.js
+        const ctx = document.getElementById('graficaClima').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], 
+                datasets: [
+                    { label: 'Temperatura (°C)', data: [], borderColor: '#e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.2)', tension: 0.3, fill: true },
+                    { label: 'Humedad (%)', data: [], borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.2)', tension: 0.3, fill: true }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: { y: { beginAtZero: false } },
+                animation: { duration: 0 } // Desactiva animación para evitar saltos raros al actualizar continuo
+            }
+        });
+
+        // 2. Conectar a MQTT de HiveMQ vía WebSockets (Puerto 8000)
+        const brokerUrl = 'ws://broker.mqttdashboard.com:8000/mqtt';
+        const client = mqtt.connect(brokerUrl);
+        const estadoTexto = document.getElementById('estado-conexion');
+
+        client.on('connect', function () {
+            console.log('Conectado al Broker Web');
+            estadoTexto.innerText = "¡Conectado al Broker MQTT (HiveMQ)!";
+            estadoTexto.style.color = "#27ae60";
+            
+            // Suscribirse para recibir los datos del clima
+            client.subscribe('proyecto/cuarto/clima');
+        });
+
+        client.on('error', function (error) {
+            console.log('Error de conexión:', error);
+            estadoTexto.innerText = "Error de conexión al Broker.";
+            estadoTexto.style.color = "#c0392b";
+        });
+
+        // 3. Recibir datos del ESP32
+        client.on('message', function (topic, message) {
+            if (topic === 'proyecto/cuarto/clima') {
+                try {
+                    const datos = JSON.parse(message.toString());
+                    const hora = new Date().toLocaleTimeString();
+                    
+                    // Actualizar la gráfica
+                    chart.data.labels.push(hora);
+                    chart.data.datasets[0].data.push(datos.temp);
+                    chart.data.datasets[1].data.push(datos.hum);
+                    
+                    // Mantener un máximo de 15 puntos en la gráfica
+                    if(chart.data.labels.length > 15) { 
+                        chart.data.labels.shift();
+                        chart.data.datasets[0].data.shift();
+                        chart.data.datasets[1].data.shift();
+                    }
+                    chart.update();
+                } catch (e) {
+                    console.error("Error al procesar el JSON: ", e);
+                }
+            }
+        });
+
+        // 4. Función para enviar órdenes desde los botones
+        function enviarMensaje(topic, msg) {
+            if (client.connected) {
+                client.publish(topic, msg);
+                console.log(`Mensaje enviado - Tópico: ${topic}, Mensaje: ${msg}`);
+            } else {
+                alert("No estás conectado al broker MQTT aún.");
+            }
+        }
+    </script>
+</body>
+</html>
