@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "author": "IoT Builder",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht1", "top": -143.7, "left": 129, "attrs": {} },
+    {
+      "type": "wokwi-servo",
+      "id": "servo1",
+      "top": -146.8,
+      "left": -208.4,
+      "rotate": 180,
+      "attrs": {}
+    },
+    { "type": "wokwi-led", "id": "led1", "top": 150, "left": -100, "attrs": { "color": "red" } },
+    { "type": "wokwi-led", "id": "led2", "top": 150, "left": -50, "attrs": { "color": "green" } },
+    { "type": "wokwi-led", "id": "led3", "top": 150, "left": 0, "attrs": { "color": "blue" } },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 190,
+      "left": -100,
+      "attrs": { "value": "220" }
+    },
+    { "type": "wokwi-resistor", "id": "r2", "top": 190, "left": -50, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r3", "top": 190, "left": 0, "attrs": { "value": "220" } }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "dht1:VCC", "esp:3V3", "red", [] ],
+    [ "dht1:GND", "esp:GND.1", "black", [] ],
+    [ "dht1:SDA", "esp:15", "green", [] ],
+    [ "servo1:V+", "esp:5V", "red", [] ],
+    [ "servo1:GND", "esp:GND.2", "black", [] ],
+    [ "servo1:PWM", "esp:18", "orange", [] ],
+    [ "led1:A", "esp:2", "red", [] ],
+    [ "led1:C", "r1:1", "black", [] ],
+    [ "r1:2", "esp:GND.3", "black", [] ],
+    [ "led2:A", "esp:4", "green", [] ],
+    [ "led2:C", "r2:1", "black", [] ],
+    [ "r2:2", "esp:GND.3", "black", [] ],
+    [ "led3:A", "esp:5", "blue", [] ],
+    [ "led3:C", "r3:1", "black", [] ],
+    [ "r3:2", "esp:GND.3", "black", [] ]
+  ],
+  "dependencies": {}
+}
