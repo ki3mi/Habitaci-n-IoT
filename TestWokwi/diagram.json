@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "author": "Uri Shaked",
+  "editor": "wokwi",
+
+  "wifi": {
+  "ssid": "Wokwi-GUEST",
+  "password": ""
+  },
+
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 9.6, "left": -62.36, "attrs": {} },
+    { "type": "wokwi-servo", "id": "servo1", "top": -107.6, "left": -220.8, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "esp:GND.1", "servo1:GND", "black", [ "h-201.45", "v-220.8" ] ],
+    [ "esp:5V", "servo1:V+", "red", [ "h-182.25", "v-259.3" ] ],
+    [ "esp:18", "servo1:PWM", "orange", [ "h38.4", "v-115.2", "h-307.2", "v-38.6" ] ]
+  ],
+  "dependencies": {}
+}
