@@ -112,6 +112,10 @@
                     chart.data.datasets[0].data.push(datos.temp);
                     chart.data.datasets[1].data.push(datos.hum);
                     
+                    // Actualizar las etiquetas de la leyenda con los valores actuales
+                    chart.data.datasets[0].label = `Temperatura (°C): ${datos.temp}°C`;
+                    chart.data.datasets[1].label = `Humedad (%): ${datos.hum}%`;
+                    
                     // Mantener un máximo de 15 puntos en la gráfica
                     if(chart.data.labels.length > 15) { 
                         chart.data.labels.shift();
