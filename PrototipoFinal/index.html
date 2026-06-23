@@ -13,14 +13,17 @@
         .controles { display: flex; justify-content: space-around; flex-wrap: wrap; }
         .grupo-control { margin: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #fafafa; min-width: 180px; }
         button { padding: 10px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; color: white; transition: 0.3s; width: 80px;}
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
         .btn-on { background-color: #27ae60; }
-        .btn-on:hover { background-color: #2ecc71; }
         .btn-off { background-color: #c0392b; }
-        .btn-off:hover { background-color: #e74c3c; }
         .btn-abrir { background-color: #2980b9; width: 100px;}
-        .btn-abrir:hover { background-color: #3498db; }
         .btn-cerrar { background-color: #f39c12; width: 100px;}
-        .btn-cerrar:hover { background-color: #f1c40f; }
+        
+        /* Estilos del botón de Modo */
+        .btn-modo { width: 210px; font-size: 14px; margin-bottom: 15px;}
+        .modo-manual { background-color: #34495e; }
+        .modo-auto { background-color: #8e44ad; }
+        
         canvas { max-width: 100%; height: auto; }
         #estado-conexion { font-weight: bold; color: #e67e22; margin-bottom: 15px; }
     </style>
@@ -34,24 +37,27 @@
         <h2>Panel de Control</h2>
         <div class="controles">
             <div class="grupo-control">
-                <h3>Luz 1 (Roja)</h3>
-                <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/1', 'ON')">ON</button>
-                <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/1', 'OFF')">OFF</button>
+                <h3>Luces (1, 2, 3)</h3>
+                <div>
+                    <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/1', 'ON')">R ON</button>
+                    <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/1', 'OFF')">R OFF</button>
+                </div>
+                <div>
+                    <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/2', 'ON')">G ON</button>
+                    <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/2', 'OFF')">G OFF</button>
+                </div>
+                <div>
+                    <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/3', 'ON')">B ON</button>
+                    <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/3', 'OFF')">B OFF</button>
+                </div>
             </div>
-            <div class="grupo-control">
-                <h3>Luz 2 (Verde)</h3>
-                <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/2', 'ON')">ON</button>
-                <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/2', 'OFF')">OFF</button>
-            </div>
-            <div class="grupo-control">
-                <h3>Luz 3 (Azul)</h3>
-                <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/3', 'ON')">ON</button>
-                <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/3', 'OFF')">OFF</button>
-            </div>
+            
             <div class="grupo-control">
                 <h3>Ventana (Servo)</h3>
-                <button class="btn-abrir" onclick="enviarMensaje('proyecto/cuarto/ventana', 'ABRIR')">ABRIR</button>
-                <button class="btn-cerrar" onclick="enviarMensaje('proyecto/cuarto/ventana', 'CERRAR')">CERRAR</button>
+                <button id="btnModo" class="btn-modo modo-manual" onclick="alternarModo()">Modo: MANUAL</button>
+                <br>
+                <button id="btnAbrir" class="btn-abrir" onclick="enviarMensaje('proyecto/cuarto/ventana', 'ABRIR')">ABRIR</button>
+                <button id="btnCerrar" class="btn-cerrar" onclick="enviarMensaje('proyecto/cuarto/ventana', 'CERRAR')">CERRAR</button>
             </div>
         </div>
     </div>
@@ -62,7 +68,8 @@
     </div>
 
     <script>
-        // 1. Configurar la Gráfica de Chart.js
+        // Variables globales
+        let modoActual = 'MANUAL';
         const ctx = document.getElementById('graficaClima').getContext('2d');
         const chart = new Chart(ctx, {
             type: 'line',
@@ -73,69 +80,78 @@
                     { label: 'Humedad (%)', data: [], borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.2)', tension: 0.3, fill: true }
                 ]
             },
-            options: {
-                responsive: true,
-                scales: { y: { beginAtZero: false } },
-                animation: { duration: 0 } // Desactiva animación para evitar saltos raros al actualizar continuo
-            }
+            options: { responsive: true, animation: { duration: 0 } }
         });
 
-        // 2. Conectar a MQTT de HiveMQ vía WebSockets (Puerto 8000)
         const brokerUrl = 'ws://broker.mqttdashboard.com:8000/mqtt';
         const client = mqtt.connect(brokerUrl);
         const estadoTexto = document.getElementById('estado-conexion');
 
         client.on('connect', function () {
-            console.log('Conectado al Broker Web');
             estadoTexto.innerText = "¡Conectado al Broker MQTT (HiveMQ)!";
             estadoTexto.style.color = "#27ae60";
             
-            // Suscribirse para recibir los datos del clima
+            // Suscripciones
             client.subscribe('proyecto/cuarto/clima');
+            client.subscribe('proyecto/cuarto/estado_modo'); 
+            
+            // Forzar estado inicial en el ESP32 por si acaso
+            enviarMensaje('proyecto/cuarto/modo_ventana', 'MANUAL'); 
         });
 
-        client.on('error', function (error) {
-            console.log('Error de conexión:', error);
-            estadoTexto.innerText = "Error de conexión al Broker.";
-            estadoTexto.style.color = "#c0392b";
-        });
-
-        // 3. Recibir datos del ESP32
         client.on('message', function (topic, message) {
+            const payload = message.toString();
+            
             if (topic === 'proyecto/cuarto/clima') {
                 try {
-                    const datos = JSON.parse(message.toString());
+                    const datos = JSON.parse(payload);
                     const hora = new Date().toLocaleTimeString();
-                    
-                    // Actualizar la gráfica
                     chart.data.labels.push(hora);
                     chart.data.datasets[0].data.push(datos.temp);
                     chart.data.datasets[1].data.push(datos.hum);
                     
-                    // Actualizar las etiquetas de la leyenda con los valores actuales
-                    chart.data.datasets[0].label = `Temperatura (°C): ${datos.temp}°C`;
-                    chart.data.datasets[1].label = `Humedad (%): ${datos.hum}%`;
-                    
-                    // Mantener un máximo de 15 puntos en la gráfica
                     if(chart.data.labels.length > 15) { 
                         chart.data.labels.shift();
                         chart.data.datasets[0].data.shift();
                         chart.data.datasets[1].data.shift();
                     }
                     chart.update();
-                } catch (e) {
-                    console.error("Error al procesar el JSON: ", e);
-                }
+                } catch (e) {}
+            }
+            // Cuando el ESP32 cambia el modo (desde el botón físico u otro lado), recibimos la confirmación aquí
+            else if (topic === 'proyecto/cuarto/estado_modo') {
+                modoActual = payload;
+                actualizarUiModo();
             }
         });
 
-        // 4. Función para enviar órdenes desde los botones
+        function alternarModo() {
+            // El clic desde la web sugiere el cambio
+            const nuevoModo = (modoActual === 'MANUAL') ? 'AUTO' : 'MANUAL';
+            enviarMensaje('proyecto/cuarto/modo_ventana', nuevoModo);
+        }
+
+        function actualizarUiModo() {
+            const btnModo = document.getElementById('btnModo');
+            const btnAbrir = document.getElementById('btnAbrir');
+            const btnCerrar = document.getElementById('btnCerrar');
+            
+            if (modoActual === 'AUTO') {
+                btnModo.innerText = 'Modo: AUTOMÁTICO';
+                btnModo.className = 'btn-modo modo-auto';
+                btnAbrir.disabled = true; 
+                btnCerrar.disabled = true;
+            } else {
+                btnModo.innerText = 'Modo: MANUAL';
+                btnModo.className = 'btn-modo modo-manual';
+                btnAbrir.disabled = false; 
+                btnCerrar.disabled = false;
+            }
+        }
+
         function enviarMensaje(topic, msg) {
             if (client.connected) {
                 client.publish(topic, msg);
-                console.log(`Mensaje enviado - Tópico: ${topic}, Mensaje: ${msg}`);
-            } else {
-                alert("No estás conectado al broker MQTT aún.");
             }
         }
     </script>
