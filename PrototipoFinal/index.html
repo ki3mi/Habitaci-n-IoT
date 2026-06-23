@@ -23,7 +23,17 @@
         .btn-modo { width: 210px; font-size: 14px; margin-bottom: 15px;}
         .modo-manual { background-color: #34495e; }
         .modo-auto { background-color: #8e44ad; }
-        
+
+        /* Switch styles */
+        .switch-container { display: flex; align-items: center; justify-content: center; margin: 10px 0; }
+        .switch { position: relative; display: inline-block; width: 56px; height: 30px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #c0392b; transition: 0.25s; border-radius: 30px; }
+        .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: 0.25s; border-radius: 50%; }
+        input:checked + .slider { background-color: #27ae60; }
+        input:checked + .slider:before { transform: translateX(26px); }
+        .label-inline { display: inline-block; margin-left: 8px; font-weight: 600; }
+
         canvas { max-width: 100%; height: auto; }
         #estado-conexion { font-weight: bold; color: #e67e22; margin-bottom: 15px; }
     </style>
@@ -38,26 +48,40 @@
         <div class="controles">
             <div class="grupo-control">
                 <h3>Luces (1, 2, 3)</h3>
-                <div>
-                    <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/1', 'ON')">R ON</button>
-                    <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/1', 'OFF')">R OFF</button>
+                <div style="margin-bottom:8px;">
+                    <label class="switch">
+                        <input type="checkbox" id="luz1" onchange="cambiarLuz('proyecto/cuarto/luz/1', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="label-inline">Luz 1 (Roja)</span>
+                </div>
+                <div style="margin-bottom:8px;">
+                    <label class="switch">
+                        <input type="checkbox" id="luz2" onchange="cambiarLuz('proyecto/cuarto/luz/2', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="label-inline">Luz 2 (Verde)</span>
                 </div>
                 <div>
-                    <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/2', 'ON')">G ON</button>
-                    <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/2', 'OFF')">G OFF</button>
-                </div>
-                <div>
-                    <button class="btn-on" onclick="enviarMensaje('proyecto/cuarto/luz/3', 'ON')">B ON</button>
-                    <button class="btn-off" onclick="enviarMensaje('proyecto/cuarto/luz/3', 'OFF')">B OFF</button>
+                    <label class="switch">
+                        <input type="checkbox" id="luz3" onchange="cambiarLuz('proyecto/cuarto/luz/3', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="label-inline">Luz 3 (Azul)</span>
                 </div>
             </div>
-            
+
             <div class="grupo-control">
                 <h3>Ventana (Servo)</h3>
                 <button id="btnModo" class="btn-modo modo-manual" onclick="alternarModo()">Modo: MANUAL</button>
                 <br>
-                <button id="btnAbrir" class="btn-abrir" onclick="enviarMensaje('proyecto/cuarto/ventana', 'ABRIR')">ABRIR</button>
-                <button id="btnCerrar" class="btn-cerrar" onclick="enviarMensaje('proyecto/cuarto/ventana', 'CERRAR')">CERRAR</button>
+                <div class="switch-container" style="margin-top:10px;">
+                    <label class="switch">
+                        <input type="checkbox" id="ventanaSwitch" onchange="cambiarVentana(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                    <span id="estadoVentanaLabel" class="label-inline">CERRADA</span>
+                </div>
             </div>
         </div>
     </div>
@@ -94,6 +118,7 @@
             // Suscripciones
             client.subscribe('proyecto/cuarto/clima');
             client.subscribe('proyecto/cuarto/estado_modo'); 
+            client.subscribe('proyecto/cuarto/estado_ventana');
             
             // Forzar estado inicial en el ESP32 por si acaso
             enviarMensaje('proyecto/cuarto/modo_ventana', 'MANUAL'); 
@@ -109,6 +134,11 @@
                     chart.data.labels.push(hora);
                     chart.data.datasets[0].data.push(datos.temp);
                     chart.data.datasets[1].data.push(datos.hum);
+                    // Actualizar las etiquetas de la leyenda con los valores actuales
+                    try {
+                        chart.data.datasets[0].label = `Temperatura (°C): ${Number(datos.temp).toFixed(1)}°C`;
+                        chart.data.datasets[1].label = `Humedad (%): ${Number(datos.hum).toFixed(0)}%`;
+                    } catch(e) { /* ignore formatting errors */ }
                     
                     if(chart.data.labels.length > 15) { 
                         chart.data.labels.shift();
@@ -123,6 +153,19 @@
                 modoActual = payload;
                 actualizarUiModo();
             }
+            else if (topic === 'proyecto/cuarto/estado_ventana') {
+                // payload esperado: 'ABRIR' / 'CERRAR' o 'OPEN' / 'CLOSED'
+                const sw = document.getElementById('ventanaSwitch');
+                const lbl = document.getElementById('estadoVentanaLabel');
+                if (!sw) return;
+                if (payload.toUpperCase() === 'ABRIR' || payload.toUpperCase() === 'OPEN' || payload.toLowerCase() === 'true') {
+                    sw.checked = true;
+                    if (lbl) lbl.innerText = 'ABIERTA';
+                } else {
+                    sw.checked = false;
+                    if (lbl) lbl.innerText = 'CERRADA';
+                }
+            }
         });
 
         function alternarModo() {
@@ -133,20 +176,34 @@
 
         function actualizarUiModo() {
             const btnModo = document.getElementById('btnModo');
-            const btnAbrir = document.getElementById('btnAbrir');
-            const btnCerrar = document.getElementById('btnCerrar');
+            const ventanaSwitch = document.getElementById('ventanaSwitch');
+            const estadoLbl = document.getElementById('estadoVentanaLabel');
             
             if (modoActual === 'AUTO') {
                 btnModo.innerText = 'Modo: AUTOMÁTICO';
                 btnModo.className = 'btn-modo modo-auto';
-                btnAbrir.disabled = true; 
-                btnCerrar.disabled = true;
+                if (ventanaSwitch) ventanaSwitch.disabled = true;
+                if (estadoLbl) estadoLbl.style.opacity = 0.6;
             } else {
                 btnModo.innerText = 'Modo: MANUAL';
                 btnModo.className = 'btn-modo modo-manual';
-                btnAbrir.disabled = false; 
-                btnCerrar.disabled = false;
+                if (ventanaSwitch) ventanaSwitch.disabled = false;
+                if (estadoLbl) estadoLbl.style.opacity = 1;
             }
+        }
+
+        // Cambiar estado de una luz mediante switch
+        function cambiarLuz(topic, isChecked) {
+            const mensaje = isChecked ? 'ON' : 'OFF';
+            enviarMensaje(topic, mensaje);
+        }
+
+        // Cambiar ventana con switch (solo en modo manual el switch estará habilitado)
+        function cambiarVentana(isChecked) {
+            const mensaje = isChecked ? 'ABRIR' : 'CERRAR';
+            const lbl = document.getElementById('estadoVentanaLabel');
+            if (lbl) lbl.innerText = isChecked ? 'ABIERTA' : 'CERRADA';
+            enviarMensaje('proyecto/cuarto/ventana', mensaje);
         }
 
         function enviarMensaje(topic, msg) {
